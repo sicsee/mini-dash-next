@@ -35,10 +35,10 @@ import { supabase } from "@/lib/supabaseClient";
 export function Sidebar() {
   const router = useRouter();
 
-  const handleLogout = async () => {
+  async function handleLogout() {
     await supabase.auth.signOut();
-    router.push("/");
-  };
+    router.push("/login");
+  }
   return (
     <div className="flex w-full sm:w-0 flex-col bg-muted/40">
       <aside className="fixed inset-y-0 left-0 z-10 hidden w-14 border-r bg-background sm:flex flex-col ">

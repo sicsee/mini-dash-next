@@ -1,4 +1,5 @@
 "use client";
+
 import {
   Card,
   CardContent,
@@ -8,49 +9,123 @@ import {
 } from "@/components/ui/card";
 import { DollarSign, Users, Percent, BadgeDollarSign } from "lucide-react";
 import MyChart from "@/components/chart";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import useAuth from "@/hooks/useAuth";
 import TableClientes from "@/components/TableClientes";
 
 export default function Dashboard() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const { user, loading } = useAuth(); // Hook de autenticação
   const [userName, setUserName] = useState("");
-
   const [totalCustomers, setTotalCustomers] = useState(0);
-
-  const handleCustomersUpdate = (count) => {
-    setTotalCustomers(count);
-  };
+  const [sales, setSales] = useState([]);
+  const [totalSales, setTotalSales] = useState(0);
+  const [totalStock, setTotalStock] = useState(0);
+  const [completedSalesCount, setCompletedSalesCount] = useState(0);
 
   useEffect(() => {
-    const fetchUserName = async () => {
-      const { data: userData, error: userError } =
-        await supabase.auth.getUser();
+    if (!loading && !user) {
+      router.push("/login");
+    }
+  }, [user, loading, router]);
 
-      if (userError || !userData?.user?.id) {
-        console.error("Erro ao obter o usuário:", userError?.message);
-        return;
-      }
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (!user) return;
 
+      // Buscar nome
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
         .select("first_name")
-        .eq("id", userData.user.id)
+        .eq("id", user.id)
         .single();
 
       if (profileError) {
-        console.error("Erro ao buscar o nome do perfil:", profileError.message);
+        console.error("Erro ao buscar o nome:", profileError.message);
+        setUserName(user.email);
+      } else {
+        setUserName(profileData?.first_name || user.email);
       }
 
-      if (profileData?.first_name) {
-        setUserName(profileData.first_name);
+      const { data: salesData, error: salesError } = await supabase
+        .from("sales")
+        .select("total_amount")
+        .eq("user_id", user.id)
+        .eq("status", "completed");
+
+      if (salesError) {
+        console.error("Erro ao buscar vendas:", salesError.message);
+        setTotalSales(0);
+      } else {
+        const total = salesData.reduce(
+          (acc, sale) => acc + sale.total_amount,
+          0
+        );
+        setTotalSales(total);
+        setSales(salesData);
+      }
+
+      const { data: completedSales, error } = await supabase
+        .from("sales")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("status", "pending");
+
+      if (error) {
+        console.error("Erro ao buscar vendas concluídas:", error.message);
+        setCompletedSalesCount(0);
+      } else {
+        setCompletedSalesCount(completedSales.length);
+      }
+
+      const { data: stockData, error: stockError } = await supabase
+        .from("stock")
+        .select("quantity");
+
+      if (stockError) {
+        console.error("Erro ao buscar produtos:", stockError.message);
+        setTotalProducts(0);
+      } else {
+        const totalStock = stockData.reduce(
+          (acc, stock) => acc + stock.quantity,
+          0
+        );
+        setTotalStock(totalStock);
       }
     };
 
-    fetchUserName();
+    fetchDashboardData();
+  }, [user]);
+
+  const handleCustomersUpdate = useCallback((count) => {
+    setTotalCustomers(count);
   }, []);
+
+  if (loading) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          height: "100vh",
+        }}
+      >
+        <p>Verificando autenticação...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  const formatter = new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
 
   return (
     <main>
@@ -61,6 +136,7 @@ export default function Dashboard() {
           </span>
         </div>
       )}
+
       <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardHeader>
@@ -70,10 +146,12 @@ export default function Dashboard() {
               </CardTitle>
               <DollarSign className="ml-auto w-4 h-4" />
             </div>
-            <CardDescription>Total vendas em 90 dias</CardDescription>
+            <CardDescription>Total vendas concluídas</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-base sm:text-lg font-bold">R$ 56.374,82</p>
+            <p className="text-base sm:text-lg font-bold">
+              {formatter.format(totalSales)}
+            </p>
           </CardContent>
         </Card>
 
@@ -88,7 +166,7 @@ export default function Dashboard() {
             <CardDescription>Novos clientes em 30 dias</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-base sm:text-lg font-bold">0</p>
+            <p className="text-base sm:text-lg font-bold">{totalCustomers}</p>
           </CardContent>
         </Card>
 
@@ -96,14 +174,16 @@ export default function Dashboard() {
           <CardHeader>
             <div className="flex items-center justify-center">
               <CardTitle className="text-lg sm:text-xl text-black dark:text-white select-none">
-                Pedidos hoje
+                Vendas Pendentes
               </CardTitle>
               <Percent className="ml-auto w-4 h-4" />
             </div>
-            <CardDescription>Total de pedidos hoje</CardDescription>
+            <CardDescription>Total de vendas pendentes</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-base sm:text-lg font-bold">29</p>
+            <p className="text-base sm:text-lg font-bold">
+              {completedSalesCount}
+            </p>
           </CardContent>
         </Card>
 
@@ -111,14 +191,14 @@ export default function Dashboard() {
           <CardHeader>
             <div className="flex items-center justify-center">
               <CardTitle className="text-lg sm:text-xl text-black dark:text-white select-none">
-                Total Pedidos
+                Produtos em Estoque
               </CardTitle>
               <BadgeDollarSign className="ml-auto w-4 h-4" />
             </div>
-            <CardDescription>Total de pedidos em 30 dias</CardDescription>
+            <CardDescription>Total de produtos no estoque</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-base sm:text-lg font-bold">1348</p>
+            <p className="text-base sm:text-lg font-bold">{totalStock}</p>
           </CardContent>
         </Card>
       </section>

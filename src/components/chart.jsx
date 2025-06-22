@@ -1,89 +1,178 @@
 "use client";
 
-import { TrendingUp } from "lucide-react";
-import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
-
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import { BarChart, Bar, CartesianGrid, XAxis, Tooltip } from "recharts";
 import {
   Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
+  CardDescription,
+  CardContent,
+  CardFooter,
 } from "@/components/ui/card";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  ChartLegend,
-  ChartLegendContent,
-} from "@/components/ui/chart";
-
-const chartData = [
-  { month: "Janeiro", desktop: 186, mobile: 80 },
-  { month: "Fevereiro", desktop: 305, mobile: 200 },
-  { month: "Março", desktop: 237, mobile: 120 },
-  { month: "Abril", desktop: 73, mobile: 190 },
-  { month: "Maio", desktop: 209, mobile: 130 },
-  { month: "Junho", desktop: 214, mobile: 140 },
-];
-
-const chartConfig = {
-  desktop: {
-    label: "Desktop",
-    color: "#3B82F6",
-    theme: {
-      light: "#3B82F6",
-      dark: "#1E40AF",
-    },
-  },
-  mobile: {
-    label: "Mobile",
-    color: "#0B2547",
-    theme: {
-      light: "#0B2547",
-      dark: "#065F46",
-    },
-  },
-};
+import { TrendingUp, TrendingDown } from "lucide-react";
 
 export default function MyChart() {
+  const [chartData, setChartData] = useState([]);
+  const [growthRate, setGrowthRate] = useState(0);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      const { data: salesData, error } = await supabase
+        .from("sales")
+        .select("total_amount, sale_date")
+        .eq("status", "completed");
+
+      if (error) {
+        console.error("Erro ao buscar vendas:", error.message);
+        return;
+      }
+
+      const processedData = groupSalesByMonth(salesData);
+      const growth = calculateGrowthRate(processedData);
+
+      setChartData(processedData);
+      setGrowthRate(growth);
+    };
+
+    fetchData();
+  }, []);
+
   return (
     <Card className="lg:w-1/2 shadow py-4 mt-0">
       <CardHeader>
-        <CardTitle>Vendas - Semestre</CardTitle>
-        <CardDescription>Janeiro - Junho 2025</CardDescription>
+        <CardTitle>Vendas por Mês</CardTitle>
+        <CardDescription>Totais mensais de vendas</CardDescription>
       </CardHeader>
+
       <CardContent>
-        <ChartContainer config={chartConfig}>
-          <BarChart accessibilityLayer data={chartData}>
-            <CartesianGrid vertical={false} />
-            <XAxis
-              dataKey="month"
-              tickLine={false}
-              tickMargin={10}
-              axisLine={false}
-              tickFormatter={(value) => value.slice(0, 3)}
-            />
-            <ChartTooltip content={<ChartTooltipContent />} />
-            <ChartLegend content={<ChartLegendContent />} />
-            <Bar
-              dataKey="desktop"
-              radius={2}
-              fill={chartConfig.desktop.color}
-            />
-            <Bar dataKey="mobile" radius={2} fill={chartConfig.mobile.color} />
-          </BarChart>
-        </ChartContainer>
+        <BarChart width={500} height={350} data={chartData}>
+          <CartesianGrid vertical={false} />
+          <XAxis dataKey="month" />
+          <Tooltip content={<CustomTooltip />} />
+          <Bar dataKey="total" fill="#2D719F" />
+        </BarChart>
       </CardContent>
-      <CardFooter className="flex-col items-start gap-2 text-sm">
-        <div className="flex gap-2 font-medium leading-none">
-          As vendas aumentaram 5.2% nesse mês <TrendingUp className="h-4 w-4" />
-        </div>
-        <div className="leading-none text-muted-foreground">
-          Resultado total de vendas nos últimos 6 meses.
-        </div>
+
+      <CardFooter className="flex gap-2 text-sm">
+        {growthRate >= 0 ? (
+          <>
+            <TrendingUp className="h-4 w-4 text-green-500" />
+            <span>
+              Vendas cresceram {growthRate.toFixed(2)}% em relação ao mês
+              anterior
+            </span>
+          </>
+        ) : (
+          <>
+            <TrendingDown className="h-4 w-4 text-red-500" />
+            <span>
+              Vendas caíram {Math.abs(growthRate).toFixed(2)}% em relação ao mês
+              anterior
+            </span>
+          </>
+        )}
       </CardFooter>
     </Card>
   );
+}
+
+function groupSalesByMonth(salesData) {
+  const monthNames = [
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
+  ];
+
+  const monthlyTotals = {};
+
+  salesData.forEach((sale) => {
+    const date = new Date(sale.sale_date);
+    const monthYear = `${monthNames[date.getMonth()]}/${date.getFullYear()}`;
+
+    if (!monthlyTotals[monthYear]) {
+      monthlyTotals[monthYear] = 0;
+    }
+
+    monthlyTotals[monthYear] += sale.total_amount;
+  });
+
+  return Object.entries(monthlyTotals)
+    .map(([month, total]) => ({ month, total }))
+    .sort((a, b) => {
+      const [monthA, yearA] = a.month.split("/");
+      const [monthB, yearB] = b.month.split("/");
+
+      const dateA = new Date(`${yearA}-${monthNumber(monthA)}-01`);
+      const dateB = new Date(`${yearB}-${monthNumber(monthB)}-01`);
+
+      return dateA - dateB;
+    });
+}
+
+function monthNumber(monthName) {
+  const monthNames = [
+    "Janeiro",
+    "Fevereiro",
+    "Março",
+    "Abril",
+    "Maio",
+    "Junho",
+    "Julho",
+    "Agosto",
+    "Setembro",
+    "Outubro",
+    "Novembro",
+    "Dezembro",
+  ];
+  return monthNames.indexOf(monthName) + 1;
+}
+
+function calculateGrowthRate(data) {
+  if (data.length < 2) return 0;
+
+  const last = data[data.length - 1];
+  const prev = data[data.length - 2];
+
+  if (prev.total === 0) return 0;
+
+  return ((last.total - prev.total) / prev.total) * 100;
+}
+
+const formatter = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+
+function CustomTooltip({ active, payload, label }) {
+  if (active && payload && payload.length) {
+    return (
+      <div
+        style={{
+          backgroundColor: "#1f2937",
+          color: "white",
+          padding: "8px",
+          borderRadius: "6px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.5)",
+          fontSize: "14px",
+          pointerEvents: "none",
+        }}
+      >
+        <div style={{ marginBottom: "4px", fontWeight: "600" }}>{label}</div>
+        <div>Valor: {formatter.format(payload[0].value.toFixed(2))}</div>
+      </div>
+    );
+  }
+
+  return null;
 }

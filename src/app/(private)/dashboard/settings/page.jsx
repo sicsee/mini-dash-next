@@ -248,6 +248,32 @@ export default function Settings() {
     }
   };
 
+  async function deleteAccount() {
+    const {
+      data: { user },
+      error: getUserError,
+    } = await supabase.auth.getUser();
+
+    if (getUserError || !user) {
+      toast.error("Usuário não autenticado.");
+      return;
+    }
+
+    const { error } = await supabase.rpc("delete_current_user");
+
+    if (error) {
+      toast.error("Erro ao excluir a conta: " + error.message);
+    } else {
+      toast.success("Conta excluída com sucesso!");
+
+      // Faz logout
+      await supabase.auth.signOut();
+
+      // Redireciona
+      window.location.href = "/login";
+    }
+  }
+
   const formatCreatedAt = (dateString) => {
     if (!dateString) return "N/A";
     const date = new Date(dateString);
@@ -507,7 +533,18 @@ export default function Settings() {
       </Card>
 
       <div>
-        <Button className="text-xl font-bold text-red-400 select-none bg-red-800/20 cursor-pointer">
+        <Button
+          className="text-xl font-bold text-red-400 bg-red-800/20 cursor-pointer"
+          onClick={() => {
+            if (
+              confirm(
+                "Tem certeza que deseja excluir sua conta? Essa ação é irreversível."
+              )
+            ) {
+              deleteAccount();
+            }
+          }}
+        >
           Excluir Conta
         </Button>
       </div>

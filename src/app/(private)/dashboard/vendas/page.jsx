@@ -1,6 +1,7 @@
 "use client";
+
 import React, { useEffect, useState, useMemo, useCallback } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase } from "@/lib/supabaseClient"; // Ajuste o caminho para o seu cliente Supabase
 import { toast } from "sonner";
 import {
   Card,
@@ -97,7 +98,7 @@ const FilterInput = React.memo(
   }
 );
 
-export default function SalesList() {
+export default function Vendas() {
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("");
@@ -105,26 +106,31 @@ export default function SalesList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSaleId, setEditingSaleId] = useState(null);
 
+  // Estados para o formulário de venda
   const [saleForm, setSaleForm] = useState({
     customer_id: "",
-    sale_date: new Date().toISOString().split("T")[0],
+    sale_date: new Date().toISOString().split("T")[0], // Formato YYYY-MM-DD
     status: "completed",
     notes: "",
   });
-  const [saleItems, setSaleItems] = useState([]);
-  const [availableProducts, setAvailableProducts] = useState([]);
-  const [availableCustomers, setAvailableCustomers] = useState([]);
+  const [saleItems, setSaleItems] = useState([]); // Itens da venda sendo criada/editada
+  const [availableProducts, setAvailableProducts] = useState([]); // Produtos para adicionar
+  const [availableCustomers, setAvailableCustomers] = useState([]); // Clientes para selecionar
 
+  // Loading específico para dados do modal
   const [loadingModalData, setLoadingModalData] = useState(false);
 
+  // Paginação
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
+  // Ordenação
   const [sortConfig, setSortConfig] = useState({
     key: "sale_date",
     direction: "desc",
   });
 
+  // Mapa de cores para o status da venda
   const statusColorMap = {
     completed:
       "bg-green-100 text-green-800 dark:bg-green-800/20 dark:text-green-300",
@@ -133,6 +139,7 @@ export default function SalesList() {
     cancelled: "bg-red-100 text-red-800 dark:bg-red-800/20 dark:text-red-300",
   };
 
+  // --- Funções de Busca de Dados ---
   const fetchSales = useCallback(async () => {
     setLoading(true);
     if (!user) {
@@ -144,7 +151,7 @@ export default function SalesList() {
       .from("sales")
       .select(
         "*, customers(name), sale_items(id, product_id, quantity, price_at_sale, products(name))"
-      )
+      ) // Busca itens e nomes de produto/cliente
       .eq("user_id", user.id)
       .order("sale_date", { ascending: false });
 
@@ -157,6 +164,7 @@ export default function SalesList() {
     setLoading(false);
   }, [user]);
 
+  // Esta função agora será chamada APENAS quando o modal é aberto
   const fetchModalDropdownData = useCallback(async () => {
     setLoadingModalData(true);
     if (!user) {
@@ -164,6 +172,7 @@ export default function SalesList() {
       return;
     }
 
+    // Buscar produtos
     const { data: productsData, error: productsError } = await supabase
       .from("products")
       .select("id, name, price")
@@ -176,6 +185,7 @@ export default function SalesList() {
       setAvailableProducts(productsData || []);
     }
 
+    // Buscar clientes
     const { data: customersData, error: customersError } = await supabase
       .from("customers")
       .select("id, name")
@@ -232,12 +242,13 @@ export default function SalesList() {
           bValue = b.customers?.name || "";
         }
 
+        // Para strings, use localeCompare para ordenação correta
         if (typeof aValue === "string" && typeof bValue === "string") {
           return sortConfig.direction === "asc"
             ? aValue.localeCompare(bValue)
             : bValue.localeCompare(aValue);
         }
-
+        // Para números ou datas, faça a comparação direta
         if (aValue < bValue) {
           return sortConfig.direction === "asc" ? -1 : 1;
         }
@@ -267,7 +278,7 @@ export default function SalesList() {
       notes: "",
     });
     setSaleItems([]);
-    await fetchModalDropdownData();
+    await fetchModalDropdownData(); // Carrega os dados APENAS ao abrir o modal
     setIsModalOpen(true);
   }, [fetchModalDropdownData]);
 
@@ -301,7 +312,7 @@ export default function SalesList() {
           }))
         );
       }
-      await fetchModalDropdownData();
+      await fetchModalDropdownData(); // Carrega os dados APENAS ao abrir o modal
       setLoadingModalData(false);
       setIsModalOpen(true);
     },
@@ -360,7 +371,7 @@ export default function SalesList() {
         const updatedItems = [...saleItems];
         updatedItems[index].product_id = productId;
         updatedItems[index].price_at_sale = product.price;
-        updatedItems[index].product_name = product.name;
+        updatedItems[index].product_name = product.name; // Adiciona o nome do produto para exibição
         updatedItems[index].total_item_amount = (
           updatedItems[index].quantity * product.price
         ).toFixed(2);
@@ -420,7 +431,56 @@ export default function SalesList() {
         let saleIdToUse = editingSaleId;
         let finalTotalAmount = parseFloat(calculateTotalSaleAmount);
 
+        // --- Lógica para reverter o estoque ANTES de atualizar a venda ---
+        // Isso é crucial para edições: primeiro reverte o que foi vendido antes,
+        // depois aplica as novas quantidades.
         if (editingSaleId) {
+          const { data: oldSaleItems, error: oldItemsError } = await supabase
+            .from("sale_items")
+            .select("product_id, quantity")
+            .eq("sale_id", editingSaleId);
+
+          if (oldItemsError) throw oldItemsError;
+
+          for (const oldItem of oldSaleItems) {
+            const { data: stockData, error: stockError } = await supabase
+              .from("stock")
+              .select("id, quantity")
+              .eq("product_id", oldItem.product_id)
+              .eq("user_id", user.id)
+              .single();
+
+            if (stockError && stockError.code !== "PGRST116") {
+              // PGRST116 = No rows found
+              console.warn(
+                `Estoque para produto ${oldItem.product_id} não encontrado ao reverter.`
+              );
+              // Não joga erro fatal, apenas avisa. A reversão pode continuar se o item não existe no estoque.
+            } else if (stockData) {
+              const newQuantity = (stockData.quantity || 0) + oldItem.quantity;
+              const { error: updateStockError } = await supabase
+                .from("stock")
+                .update({
+                  quantity: newQuantity,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", stockData.id);
+              if (updateStockError) {
+                console.error(
+                  `Erro ao reverter estoque para produto ${oldItem.product_id}: ${updateStockError.message}`
+                );
+                toast.error(
+                  `Erro ao reverter estoque para ${oldItem.product_name}.`
+                );
+                // Considerar se deve ou não lançar o erro aqui para parar a transação.
+                // Por simplicidade, vamos apenas logar e avisar.
+              }
+            }
+          }
+        }
+
+        if (editingSaleId) {
+          // Atualizar venda existente
           const { error: saleError } = await supabase
             .from("sales")
             .update({
@@ -437,12 +497,14 @@ export default function SalesList() {
           if (saleError) throw saleError;
           toast.success("Venda atualizada com sucesso!");
 
+          // Excluir todos os itens antigos e inserir os novos.
           const { error: deleteItemsError } = await supabase
             .from("sale_items")
             .delete()
             .eq("sale_id", editingSaleId);
           if (deleteItemsError) throw deleteItemsError;
         } else {
+          // Criar nova venda
           const { data: newSaleData, error: saleError } = await supabase
             .from("sales")
             .insert({
@@ -461,6 +523,7 @@ export default function SalesList() {
           toast.success("Venda criada com sucesso!");
         }
 
+        // Inserir itens da venda (novos ou atualizados)
         const itemsToInsert = saleItems.map((item) => ({
           sale_id: saleIdToUse,
           product_id: item.product_id,
@@ -474,12 +537,73 @@ export default function SalesList() {
             .from("sale_items")
             .insert(itemsToInsert);
           if (itemsError) throw itemsError;
+
+          // --- Lógica para DESCONTAR do estoque APÓS a venda ser registrada ---
+          for (const item of itemsToInsert) {
+            // 1. Buscar o item de estoque correspondente
+            const { data: stockData, error: stockSearchError } = await supabase
+              .from("stock")
+              .select("id, quantity")
+              .eq("product_id", item.product_id)
+              .eq("user_id", user.id)
+              .single();
+
+            if (stockSearchError && stockSearchError.code !== "PGRST116") {
+              // PGRST116 = No rows found (nenhuma linha encontrada)
+              throw new Error(
+                `Erro ao buscar estoque para produto ${
+                  item.product_name || item.product_id
+                }: ${stockSearchError.message}`
+              );
+            }
+
+            if (stockData) {
+              // 2. Calcular nova quantidade
+              const newQuantity = (stockData.quantity || 0) - item.quantity;
+
+              if (newQuantity < 0) {
+                // Aviso se o estoque ficar negativo
+                toast.warning(
+                  `Estoque do produto "${
+                    item.product_name || item.product_id
+                  }" ficou negativo!`
+                );
+              }
+
+              // 3. Atualizar o estoque
+              const { error: updateStockError } = await supabase
+                .from("stock")
+                .update({
+                  quantity: newQuantity,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", stockData.id);
+
+              if (updateStockError) {
+                throw new Error(
+                  `Erro ao atualizar estoque para produto ${
+                    item.product_name || item.product_id
+                  }: ${updateStockError.message}`
+                );
+              }
+            } else {
+              // O produto vendido não tem registro de estoque
+              toast.warning(
+                `Produto "${
+                  item.product_name || item.product_id
+                }" vendido, mas não encontrado no estoque para desconto.`
+              );
+            }
+          }
         }
 
         setIsModalOpen(false);
-        fetchSales();
+        fetchSales(); // Recarrega a lista de vendas (para ver as alterações)
       } catch (error) {
-        console.error("Erro ao salvar venda:", error.message);
+        console.error(
+          "Erro ao salvar venda ou atualizar estoque:",
+          error.message
+        );
         toast.error("Erro ao salvar venda: " + error.message);
       } finally {
         setLoadingModalData(false);
@@ -497,22 +621,80 @@ export default function SalesList() {
 
   const handleDeleteSale = useCallback(
     async (id) => {
-      if (!confirm("Tem certeza que quer excluir esta venda?")) return;
+      if (
+        !confirm(
+          "Tem certeza que quer excluir esta venda? Esta ação também reverterá os itens para o estoque."
+        )
+      )
+        return;
 
       try {
-        const { error } = await supabase
+        setLoading(true); // Pode ser bom mostrar um loader geral
+
+        // 1. Buscar os itens da venda antes de excluí-la
+        const { data: saleToDeleteItems, error: itemsError } = await supabase
+          .from("sale_items")
+          .select("product_id, quantity")
+          .eq("sale_id", id);
+
+        if (itemsError)
+          throw new Error(
+            "Erro ao buscar itens da venda para reverter estoque: " +
+              itemsError.message
+          );
+
+        // 2. Reverter as quantidades para o estoque
+        for (const item of saleToDeleteItems) {
+          const { data: stockData, error: stockError } = await supabase
+            .from("stock")
+            .select("id, quantity")
+            .eq("product_id", item.product_id)
+            .eq("user_id", user.id)
+            .single();
+
+          if (stockError && stockError.code !== "PGRST116") {
+            console.warn(
+              `Estoque para produto ${item.product_id} não encontrado ao reverter na exclusão.`
+            );
+          } else if (stockData) {
+            const newQuantity = (stockData.quantity || 0) + item.quantity;
+            const { error: updateStockError } = await supabase
+              .from("stock")
+              .update({
+                quantity: newQuantity,
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", stockData.id);
+            if (updateStockError) {
+              console.error(
+                `Erro ao reverter estoque para produto ${item.product_id} durante exclusão: ${updateStockError.message}`
+              );
+              toast.error(
+                `Atenção: Não foi possível reverter todo o estoque ao excluir a venda.`
+              );
+            }
+          }
+        }
+
+        // 3. Excluir a venda
+        const { error: saleDeleteError } = await supabase
           .from("sales")
           .delete()
           .eq("id", id)
-          .eq("user_id", user.id);
+          .eq("user_id", user.id); // Garante que só o dono pode excluir
 
-        if (error) throw error;
+        if (saleDeleteError) throw saleDeleteError;
 
-        toast.success("Venda excluída com sucesso!");
-        fetchSales();
+        toast.success("Venda excluída e estoque revertido com sucesso!");
+        fetchSales(); // Recarrega a lista
       } catch (error) {
-        console.error("Erro ao excluir venda:", error.message);
+        console.error(
+          "Erro ao excluir venda ou reverter estoque:",
+          error.message
+        );
         toast.error("Erro ao excluir venda: " + error.message);
+      } finally {
+        setLoading(false);
       }
     },
     [user, fetchSales]
@@ -542,6 +724,10 @@ export default function SalesList() {
       debouncedSetFilter.cancel();
     };
   }, [debouncedSetFilter]);
+
+  if (loading) {
+    return <LoadingSpinner />;
+  }
 
   return (
     <main>
