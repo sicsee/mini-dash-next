@@ -1,0 +1,93 @@
+const handleAvatarUpload = async (event) => {
+  const file = event.target.files[0];
+  if (!file) {
+    toast.error("Nenhum arquivo selecionado.");
+    return;
+  }
+
+  const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+  if (!allowedTypes.includes(file.type)) {
+    toast.error("Formato de imagem não suportado.");
+    return;
+  }
+
+  const maxSizeMB = 2;
+  if (file.size > maxSizeMB * 1024 * 1024) {
+    toast.error(`A imagem deve ter no máximo ${maxSizeMB}MB.`);
+    return;
+  }
+  setLoading(true);
+
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("Usuário não autenticado.");
+      setLoading(false);
+      return;
+    }
+
+    const fileExtension = file.name.split(".").pop(); // Use file.name aqui
+    const filePath = `<span class="math-inline">\{user\.id\}/</span>{Date.now()}.${fileExtension}`;
+    const bucketName = "avatars";
+
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(bucketName)
+      .upload(filePath, file, {
+        // <--- AQUI: usando o 'file' original
+        cacheControl: "3600",
+        upsert: true,
+      });
+
+    if (uploadError) {
+      console.error("Erro no upload para o Storage:", uploadError);
+      throw new Error(`Erro ao fazer upload da imagem: ${uploadError.message}`);
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from(bucketName)
+      .getPublicUrl(filePath);
+
+    const publicUrl = publicUrlData.publicUrl;
+
+    const { error: updateProfileError } = await supabase
+      .from("profiles")
+      .update({
+        avatar_url: publicUrl,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("user_id", user.id);
+
+    if (updateProfileError) {
+      console.error(
+        "Erro ao atualizar avatar_url no perfil:",
+        updateProfileError
+      );
+      throw new Error(
+        `Erro ao salvar URL do avatar no perfil: ${updateProfileError.message}`
+      );
+    }
+
+    const { error: updateAuthMetaError } = await supabase.auth.updateUser({
+      data: { avatar_url: publicUrl },
+    });
+    if (updateAuthMetaError) {
+      console.warn(
+        "Erro ao atualizar avatar_url nos metadados do Auth:",
+        updateAuthMetaError.message
+      );
+    }
+
+    setProfile({ ...profile, avatar_url: publicUrl });
+
+    toast.success("Foto de perfil atualizada com sucesso!", { duration: 3000 });
+  } catch (error) {
+    console.error("Erro capturado em handleAvatarUpload:", error);
+    toast.error("Erro ao carregar imagem: " + error.message, {
+      duration: 5000,
+    });
+  } finally {
+    setLoading(false);
+  }
+};

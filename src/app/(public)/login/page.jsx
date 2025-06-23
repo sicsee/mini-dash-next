@@ -48,21 +48,6 @@ export default function Login() {
     }
   };
 
-  const handleGoogleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-
-    if (error) {
-      toast.error("Erro no login com Google: " + error.message);
-    } else {
-      toast.success("Login com Google iniciado!");
-    }
-  };
-
   return (
     <main className="md:min-h-screen flex flex-col md:flex-row overflow-hidden">
       <section className="flex-1 flex items-center justify-center p-6 bg-background mt-20 sm:mt-0">
@@ -117,17 +102,6 @@ export default function Login() {
                   <Separator />
                 </div>
 
-                <Button
-                  className="w-full flex items-center justify-center gap-3 mt-5 text-sm cursor-pointer"
-                  onClick={handleGoogleLogin}
-                >
-                  <img
-                    src="https://www.svgrepo.com/show/475656/google-color.svg"
-                    alt="Google"
-                    className="h-5 w-5"
-                  />
-                  Entrar com Google
-                </Button>
                 <p className="text-sm text-center text-zinc-500 dark:text-zinc-400">
                   Não tem uma conta?{" "}
                   <Link

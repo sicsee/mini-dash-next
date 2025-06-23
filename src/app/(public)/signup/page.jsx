@@ -94,21 +94,6 @@ export default function Signup() {
     }
   };
 
-  const handleGoogleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-
-    if (error) {
-      toast.error("Erro no login com Google: " + error.message);
-    } else {
-      toast.success("Login com Google iniciado!");
-    }
-  };
-
   return (
     <main className="md:min-h-screen flex flex-col md:flex-row overflow-hidden">
       <section
@@ -215,17 +200,6 @@ export default function Signup() {
                   <Separator />
                 </div>
 
-                <Button
-                  className="w-full flex items-center justify-center gap-3 mt-5 text-sm cursor-pointer"
-                  onClick={handleGoogleLogin}
-                >
-                  <img
-                    src="https://www.svgrepo.com/show/475656/google-color.svg"
-                    alt="Google"
-                    className="h-5 w-5"
-                  />
-                  Entrar com Google
-                </Button>
                 <p className="text-sm text-center text-zinc-500 dark:text-zinc-400">
                   Já tem uma conta?{" "}
                   <Link

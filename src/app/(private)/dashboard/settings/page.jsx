@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PencilLine, ImagePlus } from "lucide-react";
 import { toast } from "sonner";
+import Resizer from "react-image-file-resizer";
 
 export default function Settings() {
   const [loading, setLoading] = useState(true);
@@ -21,6 +22,7 @@ export default function Settings() {
   const fetchProfile = async () => {
     try {
       setLoading(true);
+
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -32,9 +34,13 @@ export default function Settings() {
       }
 
       const { data, error } = await supabase
+
         .from("profiles")
+
         .select("*")
+
         .eq("user_id", user.id)
+
         .single();
 
       if (error && error.code !== "PGRST116") {
@@ -43,32 +49,50 @@ export default function Settings() {
 
       if (data) {
         setProfile(data);
+
         setNewFirstName(data.first_name || "");
+
         setNewLastName(data.last_name || "");
+
         setNewEmail(data.email || "");
+
         setNewPhone(data.phone || "");
       } else {
         setProfile({
           id: user.id,
+
           user_id: user.id,
+
           first_name: user.user_metadata?.first_name || "",
+
           last_name: user.user_metadata?.last_name || "",
+
           email: user.email,
+
           phone: "",
+
           avatar_url: user.user_metadata?.avatar_url || "",
+
           created_at: user.created_at,
+
           updated_at: new Date().toISOString(),
         });
+
         setNewFirstName(user.user_metadata?.first_name || "");
+
         setNewLastName(user.user_metadata?.last_name || "");
+
         setNewEmail(user.email || "");
+
         setNewPhone("");
+
         console.warn(
           "Perfil não encontrado na tabela profiles. Usando dados do auth.user como fallback."
         );
       }
     } catch (error) {
       console.error("Erro ao buscar perfil:", error.message);
+
       toast.error("Erro ao carregar dados do perfil: " + error.message, {
         duration: 5000,
       });
@@ -154,7 +178,7 @@ export default function Settings() {
   const handleAvatarUpload = async (event) => {
     const file = event.target.files[0];
     if (!file) {
-      toast.error("Nenhum arquivo selecionado para upload.");
+      toast.error("Nenhum arquivo selecionado.");
       return;
     }
 
@@ -166,86 +190,111 @@ export default function Settings() {
       return;
     }
 
-    setLoading(true);
-    console.log("Iniciando upload de avatar para o arquivo:", file.name);
-
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("Usuário não autenticado. Faça login novamente.");
-        setLoading(false);
-        return;
-      }
-      console.log("User ID (auth.uid()):", user.id);
-
-      const fileExtension = file.name.split(".").pop();
-      const filePath = `${user.id}/${Date.now()}.${fileExtension}`;
-      console.log("Calculated file path for Storage:", filePath);
-
-      const bucketName = "avatars";
-
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(bucketName)
-        .upload(filePath, file, {
-          cacheControl: "3600",
-          upsert: true,
-        });
-
-      if (uploadError) {
-        console.error("Erro no upload para o Storage:", uploadError);
-        throw new Error(
-          `Erro ao fazer upload da imagem: ${uploadError.message}`
-        );
-      }
-      console.log("Upload bem-sucedido:", uploadData);
-
-      const { data: publicUrlData } = supabase.storage
-        .from(bucketName)
-        .getPublicUrl(filePath);
-
-      const publicUrl = publicUrlData.publicUrl;
-      console.log("URL pública do avatar:", publicUrl);
-
-      const { error: updateProfileError } = await supabase
-        .from("profiles")
-        .update({ avatar_url: publicUrl, updated_at: new Date().toISOString() })
-        .eq("user_id", user.id);
-
-      if (updateProfileError) {
-        console.error(
-          "Erro ao atualizar avatar_url no perfil:",
-          updateProfileError
-        );
-        throw new Error(
-          `Erro ao salvar URL do avatar no perfil: ${updateProfileError.message}`
-        );
-      }
-      console.log("URL do avatar atualizada no perfil.");
-
-      const { error: updateAuthMetaError } = await supabase.auth.updateUser({
-        data: { avatar_url: publicUrl },
-      });
-      if (updateAuthMetaError) {
-        console.warn(
-          "Erro ao atualizar avatar_url nos metadados do Auth:",
-          updateAuthMetaError.message
-        );
-      }
-
-      await fetchProfile();
-      toast.success("Foto de perfil atualizada com sucesso!", {
-        duration: 3000,
-      });
-    } catch (error) {
-      console.error("Erro capturado em handleAvatarUpload:", error);
-      toast.error("Erro ao carregar imagem: " + error.message, {
-        duration: 5000,
-      });
-    } finally {
-      setLoading(false);
+    const maxSizeMB = 2; // 2MB
+    if (file.size > maxSizeMB * 1024 * 1024) {
+      toast.error(`A imagem deve ter no máximo ${maxSizeMB}MB.`);
+      return;
     }
+
+    setLoading(true);
+
+    // **** AQUI: A FUNÇÃO Resizer.imageFileResizer VAI EXECUTAR O CALLBACK ****
+    Resizer.imageFileResizer(
+      file,
+      200, // Largura máxima
+      200, // Altura máxima
+      "JPEG", // Formato de saída
+      100, // Qualidade
+      0, // Rotação (0 = sem rotação)
+      async (resizedFile) => {
+        // **** A VARIÁVEL resizedFile SÓ EXISTE AQUI DENTRO ****
+        try {
+          // Todas as operações que usam 'resizedFile' DEVEM estar aqui dentro
+          // ou em funções que são chamadas de dentro daqui e que recebem 'resizedFile' como argumento.
+
+          const {
+            data: { user },
+          } = await supabase.auth.getUser();
+          if (!user) {
+            toast.error("Usuário não autenticado.");
+            setLoading(false);
+            return;
+          }
+
+          // CORREÇÃO DA "INVALID KEY" - Garanta que está usando Template Literals corretos
+          const fileExtension = resizedFile.name.split(".").pop();
+          const filePath = `${user.id}/${Date.now()}.${fileExtension}`;
+          const bucketName = "avatars";
+
+          const { data: uploadData, error: uploadError } =
+            await supabase.storage
+              .from(bucketName)
+              .upload(filePath, resizedFile, {
+                // <-- USANDO resizedFile AQUI
+                cacheControl: "3600",
+                upsert: true,
+              });
+
+          if (uploadError) {
+            console.error("Erro no upload para o Storage:", uploadError);
+            throw new Error(
+              `Erro ao fazer upload da imagem: ${uploadError.message}`
+            );
+          }
+
+          const { data: publicUrlData } = supabase.storage
+            .from(bucketName)
+            .getPublicUrl(filePath);
+
+          const publicUrl = publicUrlData.publicUrl;
+
+          const { error: updateProfileError } = await supabase
+            .from("profiles")
+            .update({
+              avatar_url: publicUrl,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("user_id", user.id);
+
+          if (updateProfileError) {
+            console.error(
+              "Erro ao atualizar avatar_url no perfil:",
+              updateProfileError
+            );
+            throw new Error(
+              `Erro ao salvar URL do avatar no perfil: ${updateProfileError.message}`
+            );
+          }
+
+          const { error: updateAuthMetaError } = await supabase.auth.updateUser(
+            {
+              data: { avatar_url: publicUrl },
+            }
+          );
+          if (updateAuthMetaError) {
+            console.warn(
+              "Erro ao atualizar avatar_url nos metadados do Auth:",
+              updateAuthMetaError.message
+            );
+          }
+
+          // Atualize o estado profile imediatamente
+          setProfile({ ...profile, avatar_url: publicUrl });
+
+          toast.success("Foto de perfil atualizada com sucesso!", {
+            duration: 3000,
+          });
+        } catch (error) {
+          console.error("Erro capturado em handleAvatarUpload:", error);
+          toast.error("Erro ao carregar imagem: " + error.message, {
+            duration: 5000,
+          });
+        } finally {
+          setLoading(false); // <-- Certifique-se que o setLoading(false) também está aqui
+        }
+      },
+      "file" // Tipo de saída do Resizer: File/Blob
+    );
   };
 
   async function deleteAccount() {
@@ -253,82 +302,68 @@ export default function Settings() {
       data: { user },
       error: getUserError,
     } = await supabase.auth.getUser();
-
     if (getUserError || !user) {
       toast.error("Usuário não autenticado.");
       return;
     }
 
     const { error } = await supabase.rpc("delete_current_user");
-
     if (error) {
       toast.error("Erro ao excluir a conta: " + error.message);
     } else {
       toast.success("Conta excluída com sucesso!");
-
-      // Faz logout
       await supabase.auth.signOut();
-
-      // Redireciona
       window.location.href = "/login";
     }
   }
 
   const formatCreatedAt = (dateString) => {
     if (!dateString) return "N/A";
-    const date = new Date(dateString);
-    return date.toLocaleDateString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
+    return new Date(dateString).toLocaleDateString("pt-BR");
   };
 
   const getDisplayName = () => {
     if (profile) {
-      const firstName = profile.first_name || "";
-      const lastName = profile.last_name || "";
-      return `${firstName} ${lastName}`.trim() || "Usuário";
+      return (
+        `${profile.first_name || ""} ${profile.last_name || ""}`.trim() ||
+        "Usuário"
+      );
     }
     return "Convidado";
   };
 
   const getAvatarFallback = () => {
-    if (profile && profile.first_name) {
-      return profile.first_name.substring(0, 1).toUpperCase();
+    if (profile?.first_name) {
+      return profile.first_name[0].toUpperCase();
     }
     return "US";
   };
 
   if (loading && !profile) {
     return (
-      <main className="p-4 max-w-6xl space-y-6 flex flex-col items-center justify-center h-screen">
-        <h1 className="text-2xl font-bold text-black dark:text-white sm:text-3xl">
-          Carregando perfil...
-        </h1>
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+      <main className="p-4 max-w-6xl flex flex-col items-center justify-center h-screen space-y-4">
+        <h1 className="text-2xl font-bold">Carregando perfil...</h1>
+        <div className="animate-spin h-10 w-10 border-4 border-t-transparent rounded-full border-primary"></div>
       </main>
     );
   }
 
   return (
-    <main className="p-4 max-w-6xl space-y-6">
-      <h1 className="text-2xl font-bold text-black dark:text-white select-none sm:text-3xl">
-        Meu Perfil
-      </h1>
+    <main className="w-6xl mx-auto space-y-8">
+      <h1 className="text-3xl font-bold select-none">Meu Perfil</h1>
 
-      <div className="bg-card text-card-foreground rounded-xl border p-6 shadow-sm flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6 w-full">
+      <Card className="flex flex-col sm:flex-row items-center sm:items-start gap-6 p-6 border rounded-xl shadow-sm">
         <div className="relative group">
-          <Avatar className="size-20 sm:size-24">
+          <Avatar className="size-24">
             <AvatarImage
-              src={profile?.avatar_url || ""}
+              src={profile?.avatar_url || ""} // Isso está correto
               alt={`${getDisplayName()} avatar`}
             />
             <AvatarFallback>{getAvatarFallback()}</AvatarFallback>
           </Avatar>
           <label
             htmlFor="avatar-upload"
-            className="absolute bottom-0 right-0 p-1 bg-primary text-primary-foreground rounded-full cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity"
+            className="absolute bottom-0 right-0 p-1.5 bg-primary text-primary-foreground rounded-full cursor-pointer shadow-sm opacity-0 group-hover:opacity-100 transition hover:scale-105"
           >
             <ImagePlus className="h-4 w-4" />
             <Input
@@ -342,199 +377,139 @@ export default function Settings() {
           </label>
         </div>
 
-        <div className="flex flex-col items-center sm:items-start text-center sm:text-left flex-grow">
-          <h1 className="font-semibold text-xl sm:text-2xl">
-            {getDisplayName()}
-          </h1>
-          <p className="text-sm text-accent-foreground font-medium">
-            Plano base
-          </p>
-          <p className="text-sm text-muted-foreground whitespace-nowrap">
+        <div className="flex flex-col items-center sm:items-start">
+          <h2 className="text-2xl font-semibold">{getDisplayName()}</h2>
+          <p className="text-muted-foreground">Plano base</p>
+          <p className="text-sm text-muted-foreground">
             Conta criada em {formatCreatedAt(profile?.created_at)}
           </p>
         </div>
-      </div>
+      </Card>
 
-      <Card className="mb-5">
+      {/* Informações Pessoais */}
+      <Card>
         <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="text-xl font-bold text-black dark:text-white select-none mb-4 sm:mb-0">
+          <CardTitle className="text-xl font-bold mb-3 sm:mb-0">
             Informações Pessoais
           </CardTitle>
           <Button
             variant="outline"
-            className="cursor-pointer gap-2 hidden sm:flex"
+            className="gap-2 transition hover:bg-muted"
             onClick={() => setIsEditingPersonal(!isEditingPersonal)}
           >
             <PencilLine className="h-4 w-4" />
-            {isEditingPersonal ? "Cancelar Edição" : "Editar Perfil"}
+            {isEditingPersonal ? "Cancelar" : "Editar"}
           </Button>
         </CardHeader>
+
         <CardContent className="space-y-6">
-          <section className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
+            {/* Primeiro Nome */}
             <div>
-              <Label
-                htmlFor="firstName"
-                className="text-lg font-semibold text-muted-foreground mb-1"
-              >
-                Primeiro Nome
-              </Label>
+              <Label htmlFor="firstName">Primeiro Nome</Label>
               {isEditingPersonal ? (
                 <Input
                   id="firstName"
                   value={newFirstName}
                   onChange={(e) => setNewFirstName(e.target.value)}
-                  className="text-lg font-medium"
                   disabled={loading}
                 />
               ) : (
-                <p className="text-lg font-medium">
-                  {profile?.first_name || "N/A"}
-                </p>
+                <p className="font-medium">{profile?.first_name || "N/A"}</p>
               )}
             </div>
+
+            {/* Sobrenome */}
             <div>
-              <Label
-                htmlFor="lastName"
-                className="text-lg font-semibold text-muted-foreground mb-1"
-              >
-                Sobrenome
-              </Label>
+              <Label htmlFor="lastName">Sobrenome</Label>
               {isEditingPersonal ? (
                 <Input
                   id="lastName"
                   value={newLastName}
                   onChange={(e) => setNewLastName(e.target.value)}
-                  className="text-lg font-medium"
                   disabled={loading}
                 />
               ) : (
-                <p className="text-lg font-medium">
-                  {profile?.last_name || "N/A"}
-                </p>
+                <p className="font-medium">{profile?.last_name || "N/A"}</p>
               )}
             </div>
-          </section>
 
-          <section className="grid gap-4 sm:grid-cols-2">
+            {/* Email */}
             <div>
-              <Label
-                htmlFor="email"
-                className="text-lg font-semibold text-muted-foreground mb-1"
-              >
-                Endereço de Email
-              </Label>
+              <Label htmlFor="email">E-mail</Label>
               {isEditingPersonal ? (
                 <Input
                   id="email"
                   type="email"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
-                  className="text-lg font-medium"
                   disabled={loading}
                 />
               ) : (
-                <p className="text-lg font-medium">{profile?.email || "N/A"}</p>
+                <p className="font-medium">{profile?.email || "N/A"}</p>
               )}
             </div>
+
+            {/* Telefone */}
             <div>
-              <Label
-                htmlFor="phone"
-                className="text-lg font-semibold text-muted-foreground mb-1"
-              >
-                Telefone
-              </Label>
+              <Label htmlFor="phone">Telefone</Label>
               {isEditingPersonal ? (
                 <Input
                   id="phone"
                   type="tel"
                   value={newPhone}
                   onChange={(e) => setNewPhone(e.target.value)}
-                  className="text-lg font-medium"
                   disabled={loading}
                 />
               ) : (
-                <p className="text-lg font-medium">{profile?.phone || "N/A"}</p>
+                <p className="font-medium">{profile?.phone || "N/A"}</p>
               )}
             </div>
-          </section>
+          </div>
+
           {isEditingPersonal && (
             <Button onClick={handleSavePersonal} disabled={loading}>
               {loading ? "Salvando..." : "Salvar Alterações"}
             </Button>
           )}
-          <Button
-            variant="outline"
-            className="cursor-pointer gap-2 sm:hidden"
-            onClick={() => setIsEditingPersonal(!isEditingPersonal)}
-          >
-            <PencilLine className="h-4 w-4" />
-            {isEditingPersonal ? "Cancelar Edição" : "Editar Perfil"}
-          </Button>
         </CardContent>
       </Card>
 
-      <h2 className="text-xl font-bold text-black dark:text-white select-none">
-        Outros
-      </h2>
-
-      <Card className="mb-5">
-        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
-          <CardTitle className="text-xl font-bold text-black dark:text-white select-none mb-4 sm:mb-0">
-            Seu Plano
-          </CardTitle>
-          <Button
-            variant="outline"
-            className="cursor-pointer gap-2 hidden sm:flex"
-            disabled={true}
-          >
-            <PencilLine className="h-4 w-4" />
-            Editar
-          </Button>
+      {/* Plano */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-xl font-bold">Seu Plano</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <section className="grid gap-4 sm:grid-cols-2">
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <h1 className="text-lg  font-semibold text-muted-foreground mb-1">
+              <h3 className="font-semibold text-muted-foreground">
                 Data de Vencimento
-              </h1>
-              <p className="text-lg font-medium">Data/Mês/Ano</p>
+              </h3>
+              <p className="font-medium">Data/Mês/Ano</p>
             </div>
             <div>
-              <h1 className="text-lg  font-semibold text-muted-foreground mb-1">
+              <h3 className="font-semibold text-muted-foreground">
                 Forma de Pagamento
-              </h1>
-              <p className="text-lg font-medium">Cartão - Crédito *0982</p>
-            </div>
-          </section>
-
-          <section className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <h1 className="text-lg font-semibold text-muted-foreground mb-1">
-                Plano
-              </h1>
-              <p className="text-lg font-medium">Premium</p>
+              </h3>
+              <p className="font-medium">Cartão - Crédito *0982</p>
             </div>
             <div>
-              <h1 className="text-lg font-semibold text-muted-foreground mb-1">
-                Valor
-              </h1>
-              <p className="text-lg font-medium">R$ 94,99/Mês</p>
+              <h3 className="font-semibold text-muted-foreground">Plano</h3>
+              <p className="font-medium">Premium</p>
             </div>
-          </section>
-          <Button
-            variant="outline"
-            className="cursor-pointer gap-2 sm:hidden"
-            disabled={true}
-          >
-            <PencilLine className="h-4 w-4" />
-            Editar
-          </Button>
+            <div>
+              <h3 className="font-semibold text-muted-foreground">Valor</h3>
+              <p className="font-medium">R$ 94,99/Mês</p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
       <div>
         <Button
-          className="text-xl font-bold text-red-400 bg-red-800/20 cursor-pointer"
+          className="text-red-500 border border-red-500 hover:bg-red-500 hover:text-white transition"
+          variant="outline"
           onClick={() => {
             if (
               confirm(

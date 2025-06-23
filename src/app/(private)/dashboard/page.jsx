@@ -7,218 +7,233 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { DollarSign, Users, Percent, BadgeDollarSign } from "lucide-react";
-import MyChart from "@/components/chart";
+import { DollarSign, Users, Percent, Package } from "lucide-react"; // Renomeei BadgeDollarSign para Package, que é mais comum para estoque
+import MyChart from "@/components/chart"; // Certifique-se que MyChart é responsivo
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import useAuth from "@/hooks/useAuth";
-import TableClientes from "@/components/TableClientes";
+import useAuth from "@/hooks/useAuth"; // Certifique-se que useAuth está funcionando corretamente
+import TableClientes from "@/components/TableClientes"; // Certifique-se que TableClientes é responsivo
+import NewestCustomersCard from "@/components/NewstCustumer";
 
 export default function Dashboard() {
   const router = useRouter();
   const { user, loading } = useAuth(); // Hook de autenticação
   const [userName, setUserName] = useState("");
   const [totalCustomers, setTotalCustomers] = useState(0);
-  const [sales, setSales] = useState([]);
   const [totalSales, setTotalSales] = useState(0);
-  const [totalStock, setTotalStock] = useState(0);
-  const [completedSalesCount, setCompletedSalesCount] = useState(0);
+  const [totalStock, setTotalStock] = useState(0); // Renomeado de totalProducts para totalStock para clareza
+  const [pendingSalesCount, setPendingSalesCount] = useState(0); // Renomeado para clareza
 
+  // Efeito para redirecionar se o usuário não estiver autenticado
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login");
     }
   }, [user, loading, router]);
 
+  // Efeito para buscar os dados do dashboard
   useEffect(() => {
     const fetchDashboardData = async () => {
       if (!user) return;
 
-      // Buscar nome
-      const { data: profileData, error: profileError } = await supabase
-        .from("profiles")
-        .select("first_name")
-        .eq("id", user.id)
-        .single();
+      try {
+        const [
+          { data: profileData, error: profileError },
+          { data: salesData, error: salesError },
+          { data: pendingSalesData, error: pendingSalesError },
+          { data: stockData, error: stockError },
+        ] = await Promise.all([
+          supabase
+            .from("profiles")
+            .select("first_name")
+            .eq("id", user.id)
+            .single(),
+          supabase
+            .from("sales")
+            .select("total_amount")
+            .eq("user_id", user.id)
+            .eq("status", "completed"),
+          supabase
+            .from("sales")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("status", "pending"),
+          supabase.from("stock").select("quantity"),
+        ]);
 
-      if (profileError) {
-        console.error("Erro ao buscar o nome:", profileError.message);
-        setUserName(user.email);
-      } else {
-        setUserName(profileData?.first_name || user.email);
-      }
+        // Processar nome do usuário
+        if (profileError) {
+          console.error("Erro ao buscar o nome:", profileError.message);
+          setUserName(user.email);
+        } else {
+          setUserName(profileData?.first_name || user.email);
+        }
 
-      const { data: salesData, error: salesError } = await supabase
-        .from("sales")
-        .select("total_amount")
-        .eq("user_id", user.id)
-        .eq("status", "completed");
+        // Processar total de vendas
+        if (salesError) {
+          console.error(
+            "Erro ao buscar vendas concluídas:",
+            salesError.message
+          );
+          setTotalSales(0);
+        } else {
+          const total = salesData.reduce(
+            (acc, sale) => acc + sale.total_amount,
+            0
+          );
+          setTotalSales(total);
+        }
 
-      if (salesError) {
-        console.error("Erro ao buscar vendas:", salesError.message);
-        setTotalSales(0);
-      } else {
-        const total = salesData.reduce(
-          (acc, sale) => acc + sale.total_amount,
-          0
+        // Processar vendas pendentes
+        if (pendingSalesError) {
+          console.error(
+            "Erro ao buscar vendas pendentes:",
+            pendingSalesError.message
+          );
+          setPendingSalesCount(0);
+        } else {
+          setPendingSalesCount(pendingSalesData.length);
+        }
+
+        // Processar produtos em estoque
+        if (stockError) {
+          console.error(
+            "Erro ao buscar produtos em estoque:",
+            stockError.message
+          );
+          setTotalStock(0);
+        } else {
+          const total = stockData.reduce((acc, item) => acc + item.quantity, 0);
+          setTotalStock(total);
+        }
+      } catch (error) {
+        console.error(
+          "Erro geral ao buscar dados do dashboard:",
+          error.message
         );
-        setTotalSales(total);
-        setSales(salesData);
-      }
-
-      const { data: completedSales, error } = await supabase
-        .from("sales")
-        .select("id")
-        .eq("user_id", user.id)
-        .eq("status", "pending");
-
-      if (error) {
-        console.error("Erro ao buscar vendas concluídas:", error.message);
-        setCompletedSalesCount(0);
-      } else {
-        setCompletedSalesCount(completedSales.length);
-      }
-
-      const { data: stockData, error: stockError } = await supabase
-        .from("stock")
-        .select("quantity");
-
-      if (stockError) {
-        console.error("Erro ao buscar produtos:", stockError.message);
-        setTotalProducts(0);
-      } else {
-        const totalStock = stockData.reduce(
-          (acc, stock) => acc + stock.quantity,
-          0
-        );
-        setTotalStock(totalStock);
+        // Pode-se definir estados para 0 ou valores padrão aqui também em caso de erro catastrófico
       }
     };
 
     fetchDashboardData();
-  }, [user]);
+  }, [user]); // Dependência apenas do objeto user
 
+  // Callback para atualizar o total de clientes da Tabela Clientes
   const handleCustomersUpdate = useCallback((count) => {
     setTotalCustomers(count);
   }, []);
 
+  // Exibição de carregamento
   if (loading) {
     return (
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          height: "100vh",
-        }}
-      >
+      <div className="flex justify-center items-center h-screen bg-black text-white">
         <p>Verificando autenticação...</p>
       </div>
     );
   }
 
+  // Não renderiza nada se o usuário não estiver autenticado e não estiver carregando
   if (!user) {
     return null;
   }
 
+  // Formatador de moeda
   const formatter = new Intl.NumberFormat("pt-BR", {
     style: "currency",
     currency: "BRL",
   });
 
   return (
-    <main>
+    <main className="px-4 mt-2">
       {userName && (
         <div className="mt-1 mb-2">
-          <span className="text-xl italic text-foreground font-bold">
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
             Olá, {userName}
-          </span>
+          </h1>
         </div>
       )}
 
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-center">
-              <CardTitle className="text-lg sm:text-xl text-black dark:text-white select-none">
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <Card className="bg-card text-card-foreground">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base sm:text-lg font-medium">
                 Total de Vendas
               </CardTitle>
-              <DollarSign className="ml-auto w-4 h-4" />
+              <DollarSign className="w-4 h-4 text-muted-foreground" />{" "}
+              {/* Ícone com cor mais suave */}
             </div>
-            <CardDescription>Total vendas concluídas</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">
+              Total vendas concluídas
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-base sm:text-lg font-bold">
+            <p className="text-2xl sm:text-3xl font-bold">
               {formatter.format(totalSales)}
             </p>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-center">
-              <CardTitle className="text-lg sm:text-xl text-black dark:text-white select-none">
+        <Card className="bg-card text-card-foreground">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base sm:text-lg font-medium">
                 Novos Clientes
               </CardTitle>
-              <Users className="ml-auto w-4 h-4" />
+              <Users className="w-4 h-4 text-muted-foreground" />
             </div>
-            <CardDescription>Novos clientes em 30 dias</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">
+              Novos clientes em 30 dias
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-base sm:text-lg font-bold">{totalCustomers}</p>
+            <p className="text-2xl sm:text-3xl font-bold">{totalCustomers}</p>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-center">
-              <CardTitle className="text-lg sm:text-xl text-black dark:text-white select-none">
+        <Card className="bg-card text-card-foreground">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base sm:text-lg font-medium">
                 Vendas Pendentes
               </CardTitle>
-              <Percent className="ml-auto w-4 h-4" />
+              <Percent className="w-4 h-4 text-muted-foreground" />
             </div>
-            <CardDescription>Total de vendas pendentes</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">
+              Total de vendas pendentes
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-base sm:text-lg font-bold">
-              {completedSalesCount}
+            <p className="text-2xl sm:text-3xl font-bold">
+              {pendingSalesCount}
             </p>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-center">
-              <CardTitle className="text-lg sm:text-xl text-black dark:text-white select-none">
+        <Card className="bg-card text-card-foreground">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base sm:text-lg font-medium">
                 Produtos em Estoque
               </CardTitle>
-              <BadgeDollarSign className="ml-auto w-4 h-4" />
+              <Package className="w-4 h-4 text-muted-foreground" />{" "}
+              {/* Ícone de pacote para estoque */}
             </div>
-            <CardDescription>Total de produtos no estoque</CardDescription>
+            <CardDescription className="text-xs sm:text-sm">
+              Total de produtos no estoque
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-base sm:text-lg font-bold">{totalStock}</p>
+            <p className="text-2xl sm:text-3xl font-bold">{totalStock}</p>
           </CardContent>
         </Card>
       </section>
 
-      <section className="mt-4 space-y-4 md:flex gap-4">
-        <MyChart />
-        <div className="w-full max-w-2xl">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center">
-                <CardTitle className="text-lg sm:text-xl text-black dark:text-white select-none">
-                  Novos Clientes
-                </CardTitle>
-                <Users className="ml-4 w-4 h-4 md:size-6" />
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <TableClientes onCustomersUpdate={handleCustomersUpdate} />
-            </CardContent>
-          </Card>
+      <section className="mt-4 flex flex-col md:flex-row gap-4">
+        <div className="w-full md:w-1/2">
+          <MyChart />
+        </div>
+
+        <div className="w-full md:w-1/2">
+          <NewestCustomersCard />
         </div>
       </section>
     </main>

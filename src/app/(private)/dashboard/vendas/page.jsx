@@ -731,7 +731,7 @@ export default function Vendas() {
 
   return (
     <main>
-      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      <div className="px-4 max-w-7xl mx-auto">
         <Card className="mb-5">
           <CardHeader>
             <div className="flex flex-col sm:flex-row items-center justify-between gap-2">

@@ -258,7 +258,7 @@ export default function ProductList() {
 
   return (
     <main>
-      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+      <div className="px-4 max-w-7xl mx-auto">
         <Card className="mb-5">
           <CardHeader>
             <div className="flex items-center justify-center">
