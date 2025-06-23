@@ -13,7 +13,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import useAuth from "@/hooks/useAuth"; // Certifique-se que useAuth está funcionando corretamente
-import TableClientes from "@/components/TableClientes"; // Certifique-se que TableClientes é responsivo
+
 import NewestCustomersCard from "@/components/NewstCustumer";
 
 export default function Dashboard() {
@@ -38,31 +38,44 @@ export default function Dashboard() {
       if (!user) return;
 
       try {
+        const thirtyDaysAgo = new Date(
+          Date.now() - 30 * 24 * 60 * 60 * 1000
+        ).toISOString();
+
         const [
           { data: profileData, error: profileError },
           { data: salesData, error: salesError },
           { data: pendingSalesData, error: pendingSalesError },
           { data: stockData, error: stockError },
+          { data: customersData, error: customersError },
         ] = await Promise.all([
           supabase
             .from("profiles")
             .select("first_name")
             .eq("id", user.id)
             .single(),
+
           supabase
             .from("sales")
             .select("total_amount")
             .eq("user_id", user.id)
             .eq("status", "completed"),
+
           supabase
             .from("sales")
             .select("id")
             .eq("user_id", user.id)
             .eq("status", "pending"),
+
           supabase.from("stock").select("quantity"),
+
+          supabase
+            .from("customers")
+            .select("id")
+            .gte("created_at", thirtyDaysAgo), // Só clientes dos últimos 30 dias
         ]);
 
-        // Processar nome do usuário
+        // Nome do usuário
         if (profileError) {
           console.error("Erro ao buscar o nome:", profileError.message);
           setUserName(user.email);
@@ -70,12 +83,9 @@ export default function Dashboard() {
           setUserName(profileData?.first_name || user.email);
         }
 
-        // Processar total de vendas
+        // Total de vendas
         if (salesError) {
-          console.error(
-            "Erro ao buscar vendas concluídas:",
-            salesError.message
-          );
+          console.error("Erro ao buscar vendas:", salesError.message);
           setTotalSales(0);
         } else {
           const total = salesData.reduce(
@@ -85,44 +95,40 @@ export default function Dashboard() {
           setTotalSales(total);
         }
 
-        // Processar vendas pendentes
+        // Vendas pendentes
         if (pendingSalesError) {
-          console.error(
-            "Erro ao buscar vendas pendentes:",
-            pendingSalesError.message
-          );
+          console.error("Erro ao buscar pendentes:", pendingSalesError.message);
           setPendingSalesCount(0);
         } else {
           setPendingSalesCount(pendingSalesData.length);
         }
 
-        // Processar produtos em estoque
+        // Estoque
         if (stockError) {
-          console.error(
-            "Erro ao buscar produtos em estoque:",
-            stockError.message
-          );
+          console.error("Erro ao buscar estoque:", stockError.message);
           setTotalStock(0);
         } else {
           const total = stockData.reduce((acc, item) => acc + item.quantity, 0);
           setTotalStock(total);
+        }
+
+        // Total de clientes
+        if (customersError) {
+          console.error("Erro ao buscar clientes:", customersError.message);
+          setTotalCustomers(0);
+        } else {
+          setTotalCustomers(customersData.length);
         }
       } catch (error) {
         console.error(
           "Erro geral ao buscar dados do dashboard:",
           error.message
         );
-        // Pode-se definir estados para 0 ou valores padrão aqui também em caso de erro catastrófico
       }
     };
 
     fetchDashboardData();
-  }, [user]); // Dependência apenas do objeto user
-
-  // Callback para atualizar o total de clientes da Tabela Clientes
-  const handleCustomersUpdate = useCallback((count) => {
-    setTotalCustomers(count);
-  }, []);
+  }, [user]);
 
   // Exibição de carregamento
   if (loading) {
