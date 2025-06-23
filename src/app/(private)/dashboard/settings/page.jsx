@@ -349,7 +349,7 @@ export default function Settings() {
   }
 
   return (
-    <main className="w-6xl mx-auto space-y-8">
+    <main className="w-full mx-auto space-y-8">
       <h1 className="text-3xl font-bold select-none">Meu Perfil</h1>
 
       <Card className="flex flex-col sm:flex-row items-center sm:items-start gap-6 p-6 border rounded-xl shadow-sm">
