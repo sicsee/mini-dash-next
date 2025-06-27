@@ -38,6 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import DatePicker from "@/components/DatePicker";
 import { debounce } from "lodash";
 import { cn } from "@/lib/utils";
 
@@ -105,6 +106,7 @@ export default function Vendas() {
   const [user, setUser] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSaleId, setEditingSaleId] = useState(null);
+  const [dateFilter, setDateFilter] = useState(null); // Ex: new Date()
 
   // Estados para o formulário de venda
   const [saleForm, setSaleForm] = useState({
@@ -138,6 +140,12 @@ export default function Vendas() {
       "bg-orange-100 text-orange-800 dark:bg-orange-800/20 dark:text-orange-300",
     cancelled: "bg-red-100 text-red-800 dark:bg-red-800/20 dark:text-red-300",
   };
+
+  function parseDateLocal(dateString) {
+    if (!dateString) return undefined;
+    const [year, month, day] = dateString.split("-");
+    return new Date(year, month - 1, day);
+  }
 
   // --- Funções de Busca de Dados ---
   const fetchSales = useCallback(async () => {
@@ -229,6 +237,13 @@ export default function Vendas() {
             sale.sale_items.some((item) =>
               item.products?.name.toLowerCase().includes(filter.toLowerCase())
             ))
+      );
+    }
+
+    if (dateFilter) {
+      const selectedDateStr = dateFilter.toISOString().split("T")[0];
+      currentSales = currentSales.filter((sale) =>
+        sale.sale_date.startsWith(selectedDateStr)
       );
     }
 
@@ -749,12 +764,14 @@ export default function Vendas() {
           </CardContent>
         </Card>
 
-        <div className="flex flex-col sm:flex-row mb-6 gap-4 items-center justify-between">
-          <FilterInput
-            icon={SearchIcon}
-            placeholder="Buscar por cliente, status ou produto..."
-            onChange={(e) => debouncedSetFilter(e.target.value)}
-          />
+        <div className="flex flex-col sm:flex-row mb-6 gap-4 items-center justify-between flex-wrap">
+          <div className="flex flex-col sm:flex-row gap-4 items-center w-full sm:w-auto">
+            <FilterInput
+              icon={SearchIcon}
+              placeholder="Buscar por cliente, status ou produto..."
+              onChange={(e) => debouncedSetFilter(e.target.value)}
+            />
+          </div>
           <Button
             onClick={openCreateModal}
             variant="default"
@@ -975,16 +992,18 @@ export default function Vendas() {
                     <div className="space-y-2">
                       <Label htmlFor="sale_date">Data da Venda</Label>
                       {/* CAMPO DE DATA PADRÃO HTML NOVAMENTE */}
-                      <Input
-                        id="sale_date"
-                        name="sale_date"
-                        type="date"
-                        value={saleForm.sale_date}
-                        onChange={handleSaleFormChange}
-                        required
+                      <DatePicker
+                        value={parseDateLocal(saleForm.sale_date)}
+                        onChange={(date) => {
+                          setSaleForm((prev) => ({
+                            ...prev,
+                            sale_date: date
+                              ? date.toISOString().split("T")[0]
+                              : "",
+                          }));
+                        }}
                         disabled={loadingModalData}
                       />
-                      {/* FIM DO CAMPO DE DATA PADRÃO HTML */}
                     </div>
                   </div>
 
@@ -1037,7 +1056,7 @@ export default function Vendas() {
                       key={item.id || `new-item-${index}`}
                       className="grid gap-4 sm:grid-cols-4 items-end border p-4 rounded-md relative"
                     >
-                      <div className="space-y-2 col-span-2">
+                      <div className="col-span-2">
                         <Label htmlFor={`product-${index}`}>Produto</Label>
                         <Select
                           value={item.product_id}
