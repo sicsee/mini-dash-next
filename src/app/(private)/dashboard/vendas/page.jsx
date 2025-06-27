@@ -538,9 +538,7 @@ export default function Vendas() {
             .insert(itemsToInsert);
           if (itemsError) throw itemsError;
 
-          // --- Lógica para DESCONTAR do estoque APÓS a venda ser registrada ---
           for (const item of itemsToInsert) {
-            // 1. Buscar o item de estoque correspondente
             const { data: stockData, error: stockSearchError } = await supabase
               .from("stock")
               .select("id, quantity")
@@ -548,29 +546,32 @@ export default function Vendas() {
               .eq("user_id", user.id)
               .single();
 
+            // Buscar nome do produto se necessário
+            let productName = item.product_name;
+            if (!productName) {
+              const { data: productData } = await supabase
+                .from("products")
+                .select("name")
+                .eq("id", item.product_id)
+                .single();
+              productName = productData?.name || item.product_id;
+            }
+
             if (stockSearchError && stockSearchError.code !== "PGRST116") {
-              // PGRST116 = No rows found (nenhuma linha encontrada)
               throw new Error(
-                `Erro ao buscar estoque para produto ${
-                  item.product_name || item.product_id
-                }: ${stockSearchError.message}`
+                `Erro ao buscar estoque para produto "${productName}": ${stockSearchError.message}`
               );
             }
 
             if (stockData) {
-              // 2. Calcular nova quantidade
               const newQuantity = (stockData.quantity || 0) - item.quantity;
 
               if (newQuantity < 0) {
-                // Aviso se o estoque ficar negativo
                 toast.warning(
-                  `Estoque do produto "${
-                    item.product_name || item.product_id
-                  }" ficou negativo!`
+                  `Estoque do produto "${productName}" ficou negativo!`
                 );
               }
 
-              // 3. Atualizar o estoque
               const { error: updateStockError } = await supabase
                 .from("stock")
                 .update({
@@ -581,17 +582,12 @@ export default function Vendas() {
 
               if (updateStockError) {
                 throw new Error(
-                  `Erro ao atualizar estoque para produto ${
-                    item.product_name || item.product_id
-                  }: ${updateStockError.message}`
+                  `Erro ao atualizar estoque para produto "${productName}": ${updateStockError.message}`
                 );
               }
             } else {
-              // O produto vendido não tem registro de estoque
               toast.warning(
-                `Produto "${
-                  item.product_name || item.product_id
-                }" vendido, mas não encontrado no estoque para desconto.`
+                `Produto "${productName}" vendido, mas não encontrado no estoque para desconto.`
               );
             }
           }

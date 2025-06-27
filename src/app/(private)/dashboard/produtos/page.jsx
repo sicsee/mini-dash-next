@@ -237,7 +237,9 @@ export default function ProductList() {
 
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) {
-      toast.error("Erro ao excluir: " + error.message);
+      toast.error(
+        "Erro ao excluir: O produto ainda está anexado a uma compra."
+      );
     } else {
       toast.success("Produto excluído");
       if (editingId === id) {

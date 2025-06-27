@@ -349,7 +349,7 @@ export default function Settings() {
   }
 
   return (
-    <main className="w-6xl mx-auto space-y-8">
+    <main className="w-full mx-auto space-y-8">
       <h1 className="text-3xl font-bold select-none">Meu Perfil</h1>
 
       <Card className="flex flex-col sm:flex-row items-center sm:items-start gap-6 p-6 border rounded-xl shadow-sm">
@@ -386,7 +386,6 @@ export default function Settings() {
         </div>
       </Card>
 
-      {/* Informações Pessoais */}
       <Card>
         <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-xl font-bold mb-3 sm:mb-0">
@@ -404,7 +403,6 @@ export default function Settings() {
 
         <CardContent className="space-y-6">
           <div className="grid gap-4 sm:grid-cols-2">
-            {/* Primeiro Nome */}
             <div>
               <Label htmlFor="firstName">Primeiro Nome</Label>
               {isEditingPersonal ? (
@@ -419,7 +417,6 @@ export default function Settings() {
               )}
             </div>
 
-            {/* Sobrenome */}
             <div>
               <Label htmlFor="lastName">Sobrenome</Label>
               {isEditingPersonal ? (
@@ -434,7 +431,6 @@ export default function Settings() {
               )}
             </div>
 
-            {/* Email */}
             <div>
               <Label htmlFor="email">E-mail</Label>
               {isEditingPersonal ? (
@@ -475,33 +471,13 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      {/* Plano */}
       <Card>
         <CardHeader>
           <CardTitle className="text-xl font-bold">Seu Plano</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <h3 className="font-semibold text-muted-foreground">
-                Data de Vencimento
-              </h3>
-              <p className="font-medium">Data/Mês/Ano</p>
-            </div>
-            <div>
-              <h3 className="font-semibold text-muted-foreground">
-                Forma de Pagamento
-              </h3>
-              <p className="font-medium">Cartão - Crédito *0982</p>
-            </div>
-            <div>
-              <h3 className="font-semibold text-muted-foreground">Plano</h3>
-              <p className="font-medium">Premium</p>
-            </div>
-            <div>
-              <h3 className="font-semibold text-muted-foreground">Valor</h3>
-              <p className="font-medium">R$ 94,99/Mês</p>
-            </div>
+          <div className="w-full">
+            <h1 className="text-4xl font-bold text-center">EM BREVE...</h1>
           </div>
         </CardContent>
       </Card>

@@ -222,7 +222,7 @@ export default function CustomerTable({ onCustomersUpdate }) {
             name: form.name,
             email: form.email,
             phone: form.phone,
-            updated_at: new Date().toISOString(),
+            created_at: new Date().toISOString(),
           })
           .eq("id", editingId)
           .eq("user_id", user.id);
