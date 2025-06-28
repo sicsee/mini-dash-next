@@ -1,11 +1,12 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
-import { DayPicker } from "react-day-picker"
+import * as React from "react";
+import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
+import { DayPicker } from "react-day-picker";
+import ptBR from "date-fns/locale/pt-BR";
 
-import { cn } from "@/lib/utils"
-import { buttonVariants } from "@/components/ui/button"
+import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 
 function Calendar({
   className,
@@ -42,14 +43,17 @@ function Calendar({
       "text-muted-foreground data-selected:bg-accent/50 data-selected:text-muted-foreground",
     hidden: "invisible",
     week_number: "size-9 p-0 text-xs font-medium text-muted-foreground/80",
-  }
+  };
 
-  const mergedClassNames = Object.keys(defaultClassNames).reduce((acc, key) => ({
-    ...acc,
-    [key]: classNames?.[key]
-      ? cn(defaultClassNames[key], classNames[key])
-      : defaultClassNames[key],
-  }), {})
+  const mergedClassNames = Object.keys(defaultClassNames).reduce(
+    (acc, key) => ({
+      ...acc,
+      [key]: classNames?.[key]
+        ? cn(defaultClassNames[key], classNames[key])
+        : defaultClassNames[key],
+    }),
+    {}
+  );
 
   const defaultComponents = {
     Chevron: (props) => {
@@ -58,21 +62,23 @@ function Calendar({
       }
       return <ChevronRightIcon size={16} {...props} aria-hidden="true" />;
     },
-  }
+  };
 
   const mergedComponents = {
     ...defaultComponents,
     ...userComponents,
-  }
+  };
 
   return (
     <DayPicker
+      locale={ptBR}
       showOutsideDays={showOutsideDays}
       className={cn("w-fit", className)}
       classNames={mergedClassNames}
       components={mergedComponents}
-      {...props} />
+      {...props}
+    />
   );
 }
 
-export { Calendar }
+export { Calendar };

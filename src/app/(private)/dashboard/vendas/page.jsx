@@ -30,6 +30,7 @@ import {
   Search as SearchIcon,
   PlusCircle,
   Trash2,
+  Languages,
 } from "lucide-react";
 import {
   Select,
@@ -111,7 +112,7 @@ export default function Vendas() {
   // Estados para o formulário de venda
   const [saleForm, setSaleForm] = useState({
     customer_id: "",
-    sale_date: new Date().toISOString().split("T")[0], // Formato YYYY-MM-DD
+    sale_date: new Date().toISOString().split("T")[0],
     status: "completed",
     notes: "",
   });
