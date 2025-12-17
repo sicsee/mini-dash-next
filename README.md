@@ -49,6 +49,6 @@ O sistema oferece um conjunto robusto de ferramentas para o gerenciamento do neg
 
 | Detalhe | Informação |
 | --- | --- |
-| **Nome Completo** | [Seu Nome Completo] |
-| **LinkedIn** | [Link para o seu perfil do LinkedIn] |
-| **GitHub** | [Link para o seu perfil do GitHub] |
+| **Nome Completo** | Nicolas David Da Silva Godinho |
+| **LinkedIn** | https://www.linkedin.com/in/sicsee/ |
+| **GitHub** | https://github.com/sicsee/ |
